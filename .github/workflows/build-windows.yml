@@ -1,0 +1,86 @@
+name: Build instalador Windows
+
+# Gera o instalador NSIS + latest.yml (feed de actualizações).
+# - Tag vX.Y.Z  -> build + release (rascunho) no GitHub com os ficheiros.
+# - Manual      -> build e artefactos do workflow (para testar).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      client_ref:
+        description: 'Branch/tag do seedsbss-client a empacotar'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      CLIENT_DIR: client
+      SEEDS_UPDATE_URL: ${{ vars.SEEDS_UPDATE_URL }}
+      # Assinatura de código (opcional mas recomendada — sem ela o
+      # SmartScreen avisa ao instalar). .pfx em base64 + password.
+      CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+    steps:
+      - name: Checkout desktop
+        uses: actions/checkout@v4
+
+      - name: Checkout seedsbss-client
+        uses: actions/checkout@v4
+        with:
+          repository: moxi-group/seedsbss-client
+          ref: ${{ github.event.inputs.client_ref || 'main' }}
+          path: client
+          # Repo privado: token com leitura (fine-grained PAT ou GitHub App).
+          token: ${{ secrets.CLIENT_REPO_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            client/package-lock.json
+
+      - name: Dependências (desktop)
+        run: npm ci --no-audit --no-fund
+
+      - name: Dependências (client)
+        working-directory: client
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Build (typecheck + main/preload + renderer Angular)
+        run: npm run build
+        env:
+          SKIP_CLIENT_INSTALL: '1'
+
+      - name: Instalador
+        run: npx electron-builder --config electron-builder.config.js --win --x64 --publish never
+
+      - name: Artefactos
+        uses: actions/upload-artifact@v4
+        with:
+          name: seedsbss-pos-windows
+          path: |
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+
+      - name: Release (rascunho)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+
+      # Para as actualizações automáticas chegarem aos clientes, o .exe, o
+      # .blockmap e o latest.yml têm de ser publicados em SEEDS_UPDATE_URL.
+      # Acrescentar aqui o upload para o servidor escolhido (ver README).
