@@ -28,11 +28,11 @@ jobs:
       version: ${{ steps.semrel.outputs.new_release_version }}
       tag: ${{ steps.semrel.outputs.new_release_git_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
@@ -56,12 +56,12 @@ jobs:
       CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
     steps:
       - name: Checkout desktop (na tag da release)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ needs.release.outputs.tag }}
 
       - name: Checkout seedsbss-client
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: moxi-group/seedsbss-client
           ref: main
@@ -69,7 +69,7 @@ jobs:
           # Repo privado: token com leitura (fine-grained PAT ou GitHub App).
           token: ${{ secrets.CLIENT_REPO_TOKEN }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
