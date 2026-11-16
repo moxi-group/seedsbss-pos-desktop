@@ -1,0 +1,102 @@
+name: Release
+
+# Processo automático de release:
+#   1. Push para main -> semantic-release analisa os commits (conventional
+#      commits: fix:/feat:/BREAKING CHANGE) e decide a próxima versão.
+#   2. Se houver release a fazer: sobe o version no package.json, cria e
+#      publica a tag vX.Y.Z + a Release no GitHub (publicada, não draft).
+#   3. Job "build" (Windows) usa essa versão para gerar o instalador NSIS e
+#      anexa o .exe/.blockmap/latest.yml à Release já criada no passo 2.
+#
+# Corre tudo no mesmo workflow run (não depende do evento de push da tag
+# disparar outro workflow — os pushes feitos com GITHUB_TOKEN não disparam
+# outros workflows, por desenho do GitHub).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
+    outputs:
+      published: ${{ steps.semrel.outputs.new_release_published }}
+      version: ${{ steps.semrel.outputs.new_release_version }}
+      tag: ${{ steps.semrel.outputs.new_release_git_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: semantic-release
+        id: semrel
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release
+
+  build:
+    needs: release
+    if: needs.release.outputs.published == 'true'
+    runs-on: windows-latest
+    env:
+      CLIENT_DIR: client
+      SEEDS_UPDATE_URL: ${{ vars.SEEDS_UPDATE_URL }}
+      # Assinatura: electron-builder usa CSC_LINK/CSC_KEY_PASSWORD se existirem.
+      CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+    steps:
+      - name: Checkout desktop (na tag da release)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+
+      - name: Checkout seedsbss-client
+        uses: actions/checkout@v4
+        with:
+          repository: moxi-group/seedsbss-client
+          ref: main
+          path: client
+          # Repo privado: token com leitura (fine-grained PAT ou GitHub App).
+          token: ${{ secrets.CLIENT_REPO_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            client/package-lock.json
+
+      - name: Dependências (desktop)
+        run: npm ci --no-audit --no-fund
+
+      - name: Dependências (client)
+        working-directory: client
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Build (typecheck + main/preload + renderer Angular)
+        run: npm run build
+        env:
+          SKIP_CLIENT_INSTALL: '1'
+
+      - name: Instalador
+        run: npx electron-builder --config electron-builder.config.js --win --x64 --publish never
+
+      - name: Anexar instalador à Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ needs.release.outputs.tag }}" release/*.exe release/*.blockmap release/latest.yml --repo moxi-group/seedsbss-pos-desktop --clobber
+
+      # Para as actualizações automáticas chegarem aos clientes, o .exe, o
+      # .blockmap e o latest.yml têm de ser publicados em SEEDS_UPDATE_URL
+      # (acrescentar aqui o upload para o servidor escolhido — ver README).
