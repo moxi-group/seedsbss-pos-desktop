@@ -43,6 +43,46 @@ export interface DesktopSecureStore {
   removeItem(key: string): void;
 }
 
+// --- Fila offline (vendas, sessões de caixa, movimentos de caixa) --------
+
+export type MutationKind = 'sale' | 'session_open' | 'session_close' | 'cash_movement';
+export type MutationStatus = 'pending' | 'syncing' | 'synced' | 'failed';
+
+export interface PendingMutation {
+  id: string;
+  kind: MutationKind;
+  path: string;
+  payload: Record<string, unknown>;
+  status: MutationStatus;
+  attempts: number;
+  lastError: string | null;
+  /** Referência humana sequencial (ex. "OFFLINE-00042") — nunca um número
+   * fiscal, só para o operador/talão provisório acompanhar. */
+  localRef: string;
+  companyId: string;
+  posId: string;
+  dependsOnLocalId: string | null;
+  serverId: string | null;
+  result: Record<string, unknown> | null;
+  createdAt: string;
+  syncedAt: string | null;
+}
+
+export interface OfflineEnqueueInput {
+  id: string;
+  kind: MutationKind;
+  path: string;
+  payload: Record<string, unknown>;
+  companyId: string;
+  posId: string;
+  dependsOnLocalId?: string | null;
+}
+
+export type OfflineSyncEvent =
+  | { type: 'connectivity'; online: boolean }
+  | { type: 'status'; online: boolean; syncing: boolean; pendingCount: number }
+  | { type: 'mutation-synced'; mutation: PendingMutation };
+
 export interface SeedsDesktopBridge {
   readonly isDesktop: true;
   readonly store: DesktopSecureStore;
@@ -56,6 +96,9 @@ export interface SeedsDesktopBridge {
   installUpdateAndRestart(): Promise<void>;
   onUpdateStatus(callback: (status: DesktopUpdateStatus) => void): () => void;
   setKioskMode(enabled: boolean): Promise<void>;
+  offlineEnqueue(input: OfflineEnqueueInput): Promise<PendingMutation>;
+  offlineList(companyId: string): Promise<PendingMutation[]>;
+  onOfflineSyncEvent(callback: (event: OfflineSyncEvent) => void): () => void;
 }
 
 /** Canais IPC. O preload é empacotado (esbuild) com este ficheiro, por isso
@@ -74,6 +117,9 @@ export const IPC = {
   updateInstall: 'update:install',
   updateStatus: 'update:status',
   kiosk: 'window:kiosk',
+  offlineEnqueue: 'offline:enqueue',
+  offlineList: 'offline:list',
+  offlineSyncEvent: 'offline:sync-event',
 } as const;
 
 /** Chave onde o Angular guarda a configuração do terminal (ver

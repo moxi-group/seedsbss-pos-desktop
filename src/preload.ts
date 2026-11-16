@@ -7,6 +7,9 @@ import {
   DesktopPrinter,
   DesktopUpdateStatus,
   IPC,
+  OfflineEnqueueInput,
+  OfflineSyncEvent,
+  PendingMutation,
   SeedsDesktopBridge,
 } from './shared/bridge';
 
@@ -64,6 +67,16 @@ const bridge: SeedsDesktopBridge = {
   },
 
   setKioskMode: (enabled: boolean) => call<void>(IPC.kiosk, !!enabled),
+
+  offlineEnqueue: (input: OfflineEnqueueInput) => call<PendingMutation>(IPC.offlineEnqueue, input),
+  offlineList: (companyId: string) => call<PendingMutation[]>(IPC.offlineList, String(companyId)),
+  onOfflineSyncEvent: (callback: (event: OfflineSyncEvent) => void) => {
+    const listener = (_event: unknown, syncEvent: OfflineSyncEvent) => callback(syncEvent);
+    ipcRenderer.on(IPC.offlineSyncEvent, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC.offlineSyncEvent, listener);
+    };
+  },
 };
 
 contextBridge.exposeInMainWorld('seedsDesktop', bridge);

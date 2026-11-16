@@ -3,7 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { DesktopAppInfo, DesktopDrawerOptions, DesktopPrintHtmlOptions, IPC, TERMINAL_CONFIG_KEY } from './shared/bridge';
+import {
+  DesktopAppInfo,
+  DesktopDrawerOptions,
+  DesktopPrintHtmlOptions,
+  IPC,
+  OfflineEnqueueInput,
+  TERMINAL_CONFIG_KEY,
+} from './shared/bridge';
 import { openCashDrawer } from './main/cash-drawer';
 import {
   APP_HOST,
@@ -18,6 +25,7 @@ import {
 import { log } from './main/logger';
 import { defaultPrinterName, listPrinters, openPdfWindow, printHtmlSilently } from './main/printing';
 import { secureStore } from './main/secure-store';
+import { enqueueMutation, listMutations, startSyncEngine } from './main/sync-engine';
 import { checkForUpdates, installAndRestart, setupAutoUpdates } from './main/updater';
 
 // O Angular é servido em app://pos/ (origem estável, "secure", com fetch e
@@ -62,6 +70,7 @@ async function start(): Promise<void> {
   registerIpc();
   createMainWindow();
   setupAutoUpdates(() => mainWindow);
+  startSyncEngine(() => mainWindow);
 }
 
 // --- Renderer: protocolo app:// ------------------------------------------
@@ -259,4 +268,13 @@ function registerIpc(): void {
     mainWindow?.setFullScreen(!!enabled);
     if (!enabled) mainWindow?.maximize();
   });
+
+  handle(IPC.offlineEnqueue, (input: OfflineEnqueueInput) => {
+    if (typeof input?.id !== 'string' || typeof input?.companyId !== 'string') {
+      throw new Error('Mutação offline inválida.');
+    }
+    return enqueueMutation(input);
+  });
+
+  handle(IPC.offlineList, (companyId: string) => listMutations(String(companyId)));
 }

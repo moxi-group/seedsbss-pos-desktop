@@ -13,5 +13,11 @@ const common = {
   logLevel: 'info',
 };
 
-await build({ ...common, entryPoints: ['src/main.ts'], outfile: 'dist/main.js', external: ['electron', 'electron-updater'] });
+await build({
+  ...common,
+  entryPoints: ['src/main.ts'],
+  outfile: 'dist/main.js',
+  // better-sqlite3 é um módulo nativo (.node) — não pode ser empacotado.
+  external: ['electron', 'electron-updater', 'better-sqlite3'],
+});
 await build({ ...common, entryPoints: ['src/preload.ts'], outfile: 'dist/preload.js' });
