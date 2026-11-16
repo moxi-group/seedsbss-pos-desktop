@@ -84,14 +84,24 @@ npm run dist        # release/SeedsBSS-POS-Setup-<versão>.exe + latest.yml
 ```
 
 Em Windows corre directamente. Em macOS/Linux o último passo precisa de Wine,
-por isso o normal é usar o workflow `.github/workflows/build-windows.yml`
-(tag `vX.Y.Z` ou manual). O workflow precisa de:
+por isso o release real é feito pelo workflow `.github/workflows/release.yml`,
+que corre **automaticamente a cada push para `main`**: o `semantic-release`
+decide a versão a partir dos commits (`fix:`/`feat:`/`BREAKING CHANGE:`),
+publica a tag + Release no GitHub, e o job seguinte (Windows) gera o
+instalador e anexa-o a essa Release. Não há passo manual — ver o próprio
+ficheiro do workflow para o fluxo completo. O workflow precisa de:
 
 | Onde | Nome | Para quê |
 | --- | --- | --- |
 | Secret | `CLIENT_REPO_TOKEN` | Ler o `moxi-group/seedsbss-client` (privado) |
 | Secret | `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD` | Assinatura de código (.pfx em base64) |
 | Variable | `SEEDS_UPDATE_URL` | URL pública do feed de actualizações |
+
+`WIN_CSC_LINK`/`WIN_CSC_KEY_PASSWORD` já estão configurados com um
+certificado **autoassinado** (`CN=SementesDigital`, gerado localmente) — serve
+para validar que a assinatura funciona no pipeline, mas não remove o aviso do
+SmartScreen para os clientes (isso só com um certificado emitido por uma CA
+real — ver secção sobre Azure Trusted Signing discutida com a equipa).
 
 Para as actualizações chegarem aos clientes, publicar `latest.yml`, o `.exe` e
 o `.blockmap` em `SEEDS_UPDATE_URL`. A app procura actualizações ao arrancar e a

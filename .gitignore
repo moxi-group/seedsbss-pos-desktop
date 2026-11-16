@@ -8,3 +8,7 @@ Thumbs.db
 .env
 .env.*
 client/
+*.pfx
+*.key
+*.crt
+codesign.cnf
