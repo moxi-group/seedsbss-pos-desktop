@@ -1,7 +1,7 @@
 {
   "name": "seedsbss-pos-desktop",
   "productName": "SeedsBSS POS",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "SeedsBSS POS para Windows — shell Electron sobre o ecrã de venda do seedsbss-client.",
   "author": "Moxi Group",
   "private": true,
